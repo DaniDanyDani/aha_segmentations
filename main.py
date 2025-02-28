@@ -224,31 +224,43 @@ markers = {
 
 # # ν(ni) é para separar o LV (0) do RV(1) onde o septo (0.5) faz parte do LV
 ni, bcsNi, V_ni = solve_laplace(mesh0, ffun, [1, 0], markers, "ni")
-# save_solution(ni, meshname+"_ni.pvd")
+save_solution(ni, meshname+"_ni.pvd")
 
 for facet in df.facets(mesh0):
-    vertex_values = [ni(vertex.point()) for vertex in vertices(facet)]
+    vertex_values = np.floor([(ni(vertex.point())) for vertex in vertices(facet)])
     avg_ni = sum(vertex_values) / len(vertex_values)
     # print(f"{vertex_values}")
     # aaaaaa = input("aaaaaaaaaaa")
-    if avg_ni < 0.5 and ffun[facet] == markers["epi"]:
-        mesh1_subdomain[facet] = 4020
-    elif avg_ni < 0.5 and ffun[facet] == markers["rv"]:
+    if avg_ni > 0.5 and ffun[facet] == markers["epi"]:
+        mesh1_subdomain[facet] = 10
+    elif avg_ni > 0.5 and ffun[facet] == markers["rv"]:
         mesh1_subdomain[facet] = 20
-    elif avg_ni < 0.5 and ffun[facet] == markers["base"]:
-        mesh1_subdomain[facet] = 1020
-    elif avg_ni < 0.5 and not (ffun[facet] == markers["base"] and ffun[facet] == markers["rv"] and ffun[facet] == markers["epi"]):
-        mesh1_subdomain[facet] = 120
-    elif avg_ni >= 0.5 and ffun[facet] == markers["epi"]:
-        mesh1_subdomain[facet] = 4030
-    elif avg_ni >= 0.5 and ffun[facet] == markers["lv"]:
+    elif avg_ni > 0.5 and ffun[facet] == markers["base"]:
         mesh1_subdomain[facet] = 30
-    elif avg_ni >= 0.5 and ffun[facet] == markers["base"]:
-        mesh1_subdomain[facet] = 1030
-    elif avg_ni >= 0.5 and not (ffun[facet] == markers["base"] and ffun[facet] == markers["rv"] and ffun[facet] == markers["epi"]):
-        mesh1_subdomain[facet] = 130
+    elif avg_ni > 0.5 and not (ffun[facet] == markers["base"] and ffun[facet] == markers["rv"] and ffun[facet] == markers["epi"]):
+        mesh1_subdomain[facet] = 40
+    elif avg_ni <= 0.5 and ffun[facet] == markers["epi"]:
+        mesh1_subdomain[facet] = 50
+    elif avg_ni <= 0.5 and ffun[facet] == markers["lv"]:
+        mesh1_subdomain[facet] = 60
+    elif avg_ni <= 0.5 and ffun[facet] == markers["base"]:
+        mesh1_subdomain[facet] = 70
+    elif avg_ni <= 0.5 and not (ffun[facet] == markers["base"] and ffun[facet] == markers["rv"] and ffun[facet] == markers["epi"]):
+        mesh1_subdomain[facet] = 80
 
+with df.XDMFFile("malha1.xdmf") as file:
+    file.write(mesh1_subdomain)
 
+markers_subdomain ={
+    "epiRV": 10,
+    "endoRV": 20,
+    "baseRV": 30,
+    "miocardioRV": 40,
+    "epiLV": 50,
+    "endoLV": 60,
+    "baseLV": 70,
+    "miocardioLV": 80
+}
 
 
 # # ρ(ro) representa a distância do endocárdio ao epicárdio. É resolvido separado para o RV e o LV.
@@ -257,35 +269,59 @@ for facet in df.facets(mesh0):
 # ro_lv, subdomain1 = solve_lv(mesh, ni, subdomain1)
 # save_solution(ro_lv, meshname+"_roLV.pvd")
 # with df.XDMFFile("LV_subdomain.xdmf") as file:
-with df.XDMFFile("malha1.xdmf") as file:
-    file.write(sub)
+    # file.write(mesh1_subdomain)
 # ro_rv, subdomain2 = solve_rv(mesh, subdomain2)
 # save_solution(ro_rv, meshname+"_roRV.pvd")
 # with df.XDMFFile("Rv_subdomain.xdmf") as file:
 #     file.write(subdomain2)
 
-# markers_subdomain ={
-#     "epiRV": 4020,
-#     "epiLV": 4030,
-#     "endoRV": 20,
-#     "endoLV": 30,
-#     "baseRV": 1020,
-#     "baseLV": 1030,
-#     "miocardioRV": 120,
-#     "miocardioLV": 130
-# }
 
 # # Rotacional
 # para definir as cc, devemos seguir duas etapas diferentes:
 # 1° tem que achar o plano que passa no ponto médio do septo, definir a região posterior (-1) e anterior (+1) como condições de contorno
-# subdomain3 = df.MeshFunction("size_t", mesh, mesh.topology().dim() - 1, 0)
-# V = df.FunctionSpace(mesh, 'P', 1)
-# dof_x = V.tabulate_dof_coordinates().reshape((-1,3))
 
 
-# for cell in df.cells(mesh):
-#     for facet in df.facets(cell):
-#         for vertex in df.vertices(facet):
+V = df.FunctionSpace(mesh0, 'P', 1)
 
-# mid_coords = []
+dx = df.Measure('dx', domain=mesh0)
 
+u = df.TrialFunction(V)
+v = df.TestFunction(V)
+f = df.Constant(0.0)   
+a = df.dot(df.grad(u), df.grad(v))*dx  
+L = f*v*dx
+
+u = df.Function(V)
+
+baseRV_bc = df.DirichletBC(V, df.Constant(1), mesh1_subdomain, markers_subdomain["baseRV"])
+epiRV_bc = df.DirichletBC(V, df.Constant(1), mesh1_subdomain, markers_subdomain["epiRV"])
+endoRV_bc = df.DirichletBC(V, df.Constant(1), mesh1_subdomain, markers_subdomain["endoRV"])
+mioRV_bc = df.DirichletBC(V, df.Constant(1), mesh1_subdomain, markers_subdomain["miocardioRV"])
+epiLV_bc = df.DirichletBC(V, df.Constant(0), mesh1_subdomain, markers_subdomain["epiLV"])
+
+
+bcs = [baseRV_bc, epiRV_bc, endoRV_bc, mioRV_bc, epiLV_bc]
+
+df.solve(a == L, u, bcs, solver_parameters=dict(linear_solver='gmres', preconditioner='hypre_amg')) 
+save_solution(u, "first.pvd")
+
+
+u = df.TrialFunction(V)
+v = df.TestFunction(V)
+f = df.Constant(0.0)   
+a = df.dot(df.grad(u), df.grad(v))*dx  
+L = f*v*dx
+
+u = df.Function(V)
+
+baseRV_bc = df.DirichletBC(V, df.Constant(1), mesh1_subdomain, markers_subdomain["baseLV"])
+epiRV_bc = df.DirichletBC(V, df.Constant(1), mesh1_subdomain, markers_subdomain["epiLV"])
+endoRV_bc = df.DirichletBC(V, df.Constant(1), mesh1_subdomain, markers_subdomain["endoLV"])
+mioRV_bc = df.DirichletBC(V, df.Constant(1), mesh1_subdomain, markers_subdomain["miocardioLV"])
+epiLV_bc = df.DirichletBC(V, df.Constant(0), mesh1_subdomain, markers_subdomain["epiRV"])
+
+
+bcs = [baseRV_bc, epiRV_bc, endoRV_bc, mioRV_bc, epiLV_bc]
+
+df.solve(a == L, u, bcs, solver_parameters=dict(linear_solver='gmres', preconditioner='hypre_amg')) 
+save_solution(u, "second.pvd")
