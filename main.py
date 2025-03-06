@@ -209,6 +209,7 @@ ffun = df.MeshFunction("size_t", mesh0, meshname + '_facet_region.xml')
 tol = 1e-1
 subdomain1 = df.MeshFunction("size_t", mesh0, mesh0.topology().dim() - 1, 0)  # Criar um novo subdomínio para LV
 subdomain2 = df.MeshFunction("size_t", mesh0, mesh0.topology().dim() - 1, 0)  # Criar um novo subdomínio para RV
+ridge_subdomain = df.MeshFunction("size_t", mesh0, mesh0.topology().dim() - 1, 0)  # Criar um novo subdomínio para o ridge
 mesh1_subdomain = df.MeshFunction("size_t", mesh0, mesh0.topology().dim() - 1, 0)  # Criar um novo subdomínio para LV
 
 markers = {
@@ -227,7 +228,7 @@ ni, bcsNi, V_ni = solve_laplace(mesh0, ffun, [1, 0], markers, "ni")
 save_solution(ni, meshname+"_ni.pvd")
 
 for facet in df.facets(mesh0):
-    vertex_values = np.floor([(ni(vertex.point())) for vertex in vertices(facet)])
+    vertex_values = [(ni(vertex.point())) for vertex in vertices(facet)]
     avg_ni = sum(vertex_values) / len(vertex_values)
     # print(f"{vertex_values}")
     # aaaaaa = input("aaaaaaaaaaa")
@@ -285,13 +286,13 @@ V = df.FunctionSpace(mesh0, 'P', 1)
 
 dx = df.Measure('dx', domain=mesh0)
 
-u = df.TrialFunction(V)
+rv_ridge = df.TrialFunction(V)
 v = df.TestFunction(V)
 f = df.Constant(0.0)   
-a = df.dot(df.grad(u), df.grad(v))*dx  
+a = df.dot(df.grad(rv_ridge), df.grad(v))*dx  
 L = f*v*dx
 
-u = df.Function(V)
+rv_ridge = df.Function(V)
 
 baseRV_bc = df.DirichletBC(V, df.Constant(1), mesh1_subdomain, markers_subdomain["baseRV"])
 epiRV_bc = df.DirichletBC(V, df.Constant(1), mesh1_subdomain, markers_subdomain["epiRV"])
@@ -302,26 +303,42 @@ epiLV_bc = df.DirichletBC(V, df.Constant(0), mesh1_subdomain, markers_subdomain[
 
 bcs = [baseRV_bc, epiRV_bc, endoRV_bc, mioRV_bc, epiLV_bc]
 
-df.solve(a == L, u, bcs, solver_parameters=dict(linear_solver='gmres', preconditioner='hypre_amg')) 
-save_solution(u, "first.pvd")
+df.solve(a == L, rv_ridge, bcs, solver_parameters=dict(linear_solver='gmres', preconditioner='hypre_amg')) 
+save_solution(rv_ridge, "first.pvd")
 
 
-u = df.TrialFunction(V)
+lv_ridge = df.TrialFunction(V)
 v = df.TestFunction(V)
 f = df.Constant(0.0)   
-a = df.dot(df.grad(u), df.grad(v))*dx  
+a = df.dot(df.grad(lv_ridge), df.grad(v))*dx  
 L = f*v*dx
 
-u = df.Function(V)
+lv_ridge = df.Function(V)
 
-baseRV_bc = df.DirichletBC(V, df.Constant(1), mesh1_subdomain, markers_subdomain["baseLV"])
-epiRV_bc = df.DirichletBC(V, df.Constant(1), mesh1_subdomain, markers_subdomain["epiLV"])
-endoRV_bc = df.DirichletBC(V, df.Constant(1), mesh1_subdomain, markers_subdomain["endoLV"])
-mioRV_bc = df.DirichletBC(V, df.Constant(1), mesh1_subdomain, markers_subdomain["miocardioLV"])
-epiLV_bc = df.DirichletBC(V, df.Constant(0), mesh1_subdomain, markers_subdomain["epiRV"])
+baseLV_bc = df.DirichletBC(V, df.Constant(1), mesh1_subdomain, markers_subdomain["baseLV"])
+epiLV_bc = df.DirichletBC(V, df.Constant(1), mesh1_subdomain, markers_subdomain["epiLV"])
+endoLV_bc = df.DirichletBC(V, df.Constant(1), mesh1_subdomain, markers_subdomain["endoLV"])
+mioLV_bc = df.DirichletBC(V, df.Constant(1), mesh1_subdomain, markers_subdomain["miocardioLV"])
+epiRV_bc = df.DirichletBC(V, df.Constant(0), mesh1_subdomain, markers_subdomain["epiRV"])
 
 
-bcs = [baseRV_bc, epiRV_bc, endoRV_bc, mioRV_bc, epiLV_bc]
+bcs = [baseLV_bc, epiLV_bc, endoLV_bc, mioLV_bc, epiRV_bc]
 
-df.solve(a == L, u, bcs, solver_parameters=dict(linear_solver='gmres', preconditioner='hypre_amg')) 
-save_solution(u, "second.pvd")
+df.solve(a == L, lv_ridge, bcs, solver_parameters=dict(linear_solver='gmres', preconditioner='hypre_amg')) 
+save_solution(lv_ridge, "second.pvd")
+
+for facet in df.facets(mesh0):
+    vertex_values_rv = [(rv_ridge(vertex.point())) for vertex in vertices(facet)]
+    avg_ni_rv = sum(vertex_values_rv) / len(vertex_values_rv)
+    vertex_values_lv = [(lv_ridge(vertex.point())) for vertex in vertices(facet)]
+    avg_ni_lv = sum(vertex_values_lv) / len(vertex_values_lv)
+    # print(f"{vertex_values}")
+    # aaaaaa = input("aaaaaaaaaaa")
+    if avg_ni_rv <= 0.5 or avg_ni_lv <= 0.5:
+        ridge_subdomain[facet] = 90
+    elif avg_ni_rv >= 0.5 and avg_ni_lv >= 0.5:
+        ridge_subdomain[facet] = 100
+
+
+with df.XDMFFile("malha2.xdmf") as file:
+    file.write(ridge_subdomain)
