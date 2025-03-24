@@ -5,7 +5,6 @@ import numpy as np
 import meshio
 import subprocess
 
-
 def solve_laplace(mesh, boundary_markers, boundary_values, ldrb_markers, uvc = "None"):
 
     if uvc == "None":
@@ -211,6 +210,7 @@ subdomain1 = df.MeshFunction("size_t", mesh0, mesh0.topology().dim() - 1, 0)  # 
 subdomain2 = df.MeshFunction("size_t", mesh0, mesh0.topology().dim() - 1, 0)  # Criar um novo subdomínio para RV
 ridge_subdomain = df.MeshFunction("size_t", mesh0, mesh0.topology().dim() - 1, 0)  # Criar um novo subdomínio para o ridge
 mesh1_subdomain = df.MeshFunction("size_t", mesh0, mesh0.topology().dim() - 1, 0)  # Criar um novo subdomínio para LV
+mesh2_subdomain = df.MeshFunction("size_t", mesh0, mesh0.topology().dim() - 1, 0)  # Criar um novo subdomínio para LV
 
 markers = {
     "base": 10,
@@ -225,7 +225,7 @@ markers = {
 
 # # ν(ni) é para separar o LV (0) do RV(1) onde o septo (0.5) faz parte do LV
 ni, bcsNi, V_ni = solve_laplace(mesh0, ffun, [1, 0], markers, "ni")
-save_solution(ni, meshname+"_ni.pvd")
+# save_solution(ni, meshname+"_ni.pvd")
 
 for facet in df.facets(mesh0):
     vertex_values = [(ni(vertex.point())) for vertex in vertices(facet)]
@@ -304,7 +304,7 @@ epiLV_bc = df.DirichletBC(V, df.Constant(0), mesh1_subdomain, markers_subdomain[
 bcs = [baseRV_bc, epiRV_bc, endoRV_bc, mioRV_bc, epiLV_bc]
 
 df.solve(a == L, rv_ridge, bcs, solver_parameters=dict(linear_solver='gmres', preconditioner='hypre_amg')) 
-save_solution(rv_ridge, "first.pvd")
+# save_solution(rv_ridge, "first.pvd")
 
 
 lv_ridge = df.TrialFunction(V)
@@ -325,7 +325,7 @@ epiRV_bc = df.DirichletBC(V, df.Constant(0), mesh1_subdomain, markers_subdomain[
 bcs = [baseLV_bc, epiLV_bc, endoLV_bc, mioLV_bc, epiRV_bc]
 
 df.solve(a == L, lv_ridge, bcs, solver_parameters=dict(linear_solver='gmres', preconditioner='hypre_amg')) 
-save_solution(lv_ridge, "second.pvd")
+# save_solution(lv_ridge, "second.pvd")
 
 for facet in df.facets(mesh0):
     vertex_values_rv = [(rv_ridge(vertex.point())) for vertex in vertices(facet)]
@@ -342,3 +342,77 @@ for facet in df.facets(mesh0):
 
 with df.XDMFFile("malha2.xdmf") as file:
     file.write(ridge_subdomain)
+
+inicio = True
+i = 0
+
+
+vertex_2 = []
+print(f"Pegando vertices")
+for face in df.facets(mesh0):
+    if ridge_subdomain[face] == 90:
+        for vertex in df.vertices(face):
+            vertex_2.append(vertex)
+
+print(f"    {len(vertex_2)=}\n")
+input("a")
+
+print(f"mesh2_subdomain")
+for face in df.facets(mesh0):
+    found = False
+    if ridge_subdomain[face] == 100:
+        if inicio:
+            print(f"    ridge_subdomain[{face}] == 100 ")
+            inicio = False
+        
+        for vertex in df.vertices(face):
+            if vertex in vertex_2:
+                print(f"    Superficie encontrada {i=}; \n        face: {face}")
+                mesh2_subdomain[face] = 1
+                found = True
+                inicio = True
+                break
+            else:
+                # i += 1
+                continue
+
+                        # print(f"    {interacao=}")
+    # print(f"    {i=}")
+    i += 1
+            # inicio = True                
+# print(f"mesh2_subdomain\n")
+# for face in df.facets(mesh0):
+#     # if inicio:
+#     #     print(f"Face1 = {face}")
+#     found = False
+#     for face_2 in df.facets(mesh0):
+#         # if inicio:
+#         #     print(f"Face2 = {face_2}")
+#         if found:
+#             break
+#         if ridge_subdomain[face] == 100 and ridge_subdomain[face_2] == 90:
+#             if inicio:
+#                 print(f"ridge_subdomain[{face}] == 100 and ridge_subdomain[{face_2}] == 90:")
+#                 inicio = False
+#             for vertex in df.vertices(face):
+#                 if found:
+#                     break
+#                 for vertex_2 in df.vertices(face_2):
+#                     if vertex == vertex_2:
+#                         print(f"    Superficie encontrada {i=}; \n        face: {face}")
+#                         mesh2_subdomain[face] = 1
+#                         found = True
+#                         inicio = True
+#                         break
+#                     else:
+#                         # i += 1
+#                         continue
+
+#                         # print(f"    {interacao=}")
+#     print(f"    {i=}")
+#     i += 1
+#             # inicio = True                
+           
+
+with df.XDMFFile("surface.xdmf") as file:
+    file.write(mesh2_subdomain)
