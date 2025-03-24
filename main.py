@@ -363,6 +363,7 @@ for face in df.facets(mesh0):
     if ridge_subdomain[face] == 100:
         if inicio:
             print(f"    ridge_subdomain[{face}] == 100 ")
+            # input("    a")
             inicio = False
         
         for vertex in df.vertices(face):
