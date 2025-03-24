@@ -348,38 +348,50 @@ i = 0
 
 
 vertex_2 = []
-print(f"Pegando vertices")
+vertex_1 = []
+print(f"Pegando vertices coracao")
 for face in df.facets(mesh0):
-    if ridge_subdomain[face] == 90:
-        for vertex in df.vertices(face):
-            vertex_2.append(vertex)
+    for vertex in df.vertices(face):
+        vertex_2.append(vertex)
 
 print(f"    {len(vertex_2)=}\n")
 input("a")
 
-print(f"mesh2_subdomain")
+print(f"Pegando vertices ridge")
 for face in df.facets(mesh0):
-    found = False
-    if ridge_subdomain[face] == 100:
-        if inicio:
-            print(f"    ridge_subdomain[{face}] == 100 ")
-            # input("    a")
-            inicio = False
-        
-        for vertex in df.vertices(face):
-            if vertex in vertex_2:
-                print(f"    Superficie encontrada {i=}; \n        face: {face}")
-                mesh2_subdomain[face] = 1
-                found = True
-                inicio = True
-                break
-            else:
-                # i += 1
-                continue
+    for vertex in df.vertices(face):
+        vertex_1.append(vertex)
 
-                        # print(f"    {interacao=}")
-    # print(f"    {i=}")
-    i += 1
+print(f"    {len(vertex_1)=}\n")
+input("a")
+
+print(f"{vertex_1[0]=}")
+print(f"{vertex_2[0]=}")
+print(vertex_1 == vertex_2)
+
+#print(f"mesh2_subdomain")
+#for face in df.facets(mesh0):
+#    found = False
+#    if ridge_subdomain[face] == 100:
+#        if inicio:
+#            print(f"    ridge_subdomain[{face}] == 100 ")
+#            # input("    a")
+#            inicio = False
+#        
+#        for vertex in df.vertices(face):
+#            if vertex in vertex_2:
+#                print(f"    Superficie encontrada {i=}; \n        face: {face}")
+#                mesh2_subdomain[face] = 1
+#                found = True
+#                inicio = True
+#                break
+#            else:
+#                # i += 1
+#                continue
+#
+#                        # print(f"    {interacao=}")
+#    # print(f"    {i=}")
+#    i += 1
             # inicio = True                
 # print(f"mesh2_subdomain\n")
 # for face in df.facets(mesh0):
