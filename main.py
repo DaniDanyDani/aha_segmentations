@@ -348,84 +348,50 @@ i = 0
 
 
 vertex_2 = []
-vertex_1 = []
 print(f"Pegando vertices coracao")
 for face in df.facets(mesh0):
-    for vertex in df.vertices(face):
-        vertex_2.append(vertex)
+    if ridge_subdomain[face] == 90:
+        for vertex in df.vertices(face):
+            vertex_2.append(vertex.point().array())
 
-print(f"    {len(vertex_2)=}\n")
-input("a")
 
-print(f"Pegando vertices ridge")
+print(f"mesh2_subdomain")
 for face in df.facets(mesh0):
-    for vertex in df.vertices(face):
-        vertex_1.append(vertex)
+    found = False
+    print(f"{i}")
+    for face2 in df.facets(mesh0):
+        
+        if found:
+            break
 
-print(f"    {len(vertex_1)=}\n")
-input("a")
+        if ridge_subdomain[face] == 100 and ridge_subdomain[face2] == 90:
+            if inicio:
+                print(f"    {ridge_subdomain[face]=} == 100\n    {ridge_subdomain[face2]=} == 90")
+                # input("    a")
+                inicio = False
+            
+            if found:
+                break
 
-print(f"{vertex_1[0]=}")
-print(f"{vertex_2[0]=}")
-print(vertex_1 == vertex_2)
+            for vertex in df.vertices(face):
+                
+                if found:
+                    break
 
-#print(f"mesh2_subdomain")
-#for face in df.facets(mesh0):
-#    found = False
-#    if ridge_subdomain[face] == 100:
-#        if inicio:
-#            print(f"    ridge_subdomain[{face}] == 100 ")
-#            # input("    a")
-#            inicio = False
-#        
-#        for vertex in df.vertices(face):
-#            if vertex in vertex_2:
-#                print(f"    Superficie encontrada {i=}; \n        face: {face}")
-#                mesh2_subdomain[face] = 1
-#                found = True
-#                inicio = True
-#                break
-#            else:
-#                # i += 1
-#                continue
-#
-#                        # print(f"    {interacao=}")
-#    # print(f"    {i=}")
-#    i += 1
-            # inicio = True                
-# print(f"mesh2_subdomain\n")
-# for face in df.facets(mesh0):
-#     # if inicio:
-#     #     print(f"Face1 = {face}")
-#     found = False
-#     for face_2 in df.facets(mesh0):
-#         # if inicio:
-#         #     print(f"Face2 = {face_2}")
-#         if found:
-#             break
-#         if ridge_subdomain[face] == 100 and ridge_subdomain[face_2] == 90:
-#             if inicio:
-#                 print(f"ridge_subdomain[{face}] == 100 and ridge_subdomain[{face_2}] == 90:")
-#                 inicio = False
-#             for vertex in df.vertices(face):
-#                 if found:
-#                     break
-#                 for vertex_2 in df.vertices(face_2):
-#                     if vertex == vertex_2:
-#                         print(f"    Superficie encontrada {i=}; \n        face: {face}")
-#                         mesh2_subdomain[face] = 1
-#                         found = True
-#                         inicio = True
-#                         break
-#                     else:
-#                         # i += 1
-#                         continue
+                for vertex2 in df.vertices(face2):
+                    if vertex.point().array() == vertex_2.point().array():
+                        print(f"    Superficie encontrada {i=}; \n        face: {face}")
+                        mesh2_subdomain[face] = 1
+                        found = True
+                        inicio = True
+                        break
+                    else:
+                        # i += 1
+                        continue
 
-#                         # print(f"    {interacao=}")
-#     print(f"    {i=}")
-#     i += 1
-#             # inicio = True                
+
+        i+=1
+
            
-
 with df.XDMFFile("surface.xdmf") as file:
     file.write(mesh2_subdomain)
