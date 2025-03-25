@@ -343,54 +343,38 @@ for facet in df.facets(mesh0):
 with df.XDMFFile("malha2.xdmf") as file:
     file.write(ridge_subdomain)
 
-inicio = True
-i = 0
 
-
-vertex_2 = []
-print(f"Pegando vertices coracao")
+vertices_heart = set()
 for face in df.facets(mesh0):
     if ridge_subdomain[face] == 90:
         for vertex in df.vertices(face):
-            vertex_2.append(vertex.point().array())
+            vertices_heart.add(tuple(vertex.point().array()))
+
+
 
 
 print(f"mesh2_subdomain")
+# i = 0
 for face in df.facets(mesh0):
-    found = False
-    print(f"{i}")
-    for face2 in df.facets(mesh0):
-        
-        if found:
-            break
+    # print(f"{i=}")
 
-        if ridge_subdomain[face] == 100 and ridge_subdomain[face2] == 90:
-            if inicio:
-                print(f"    {ridge_subdomain[face]=} == 100\n    {ridge_subdomain[face2]=} == 90")
-                # input("    a")
-                inicio = False
-            
-            if found:
+    if ridge_subdomain[face] == 100:        
+
+        for vertex in df.vertices(face):
+
+            if tuple(vertex.point().array()) in vertices_heart:
+                # print(f"    {ridge_subdomain[face]=}")
+                # print(f"    {vertex.point().array()=}")
+
+                mesh2_subdomain[face] = 1
                 break
+            else:
 
-            for vertex in df.vertices(face):
-                
-                if found:
-                    break
-
-                for vertex2 in df.vertices(face2):
-                    if vertex.point().array() == vertex_2.point().array():
-                        print(f"    Superficie encontrada {i=}; \n        face: {face}")
-                        mesh2_subdomain[face] = 1
-                        found = True
-                        inicio = True
-                        break
-                    else:
-                        # i += 1
-                        continue
+                continue
 
 
-        i+=1
+    # i+=1
+
 
            
 with df.XDMFFile("surface.xdmf") as file:
