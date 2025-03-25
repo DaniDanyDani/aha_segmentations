@@ -206,11 +206,11 @@ mesh0 = df.Mesh(meshname + '.xml')
 materials = df.MeshFunction("size_t", mesh0, meshname + '_physical_region.xml')
 ffun = df.MeshFunction("size_t", mesh0, meshname + '_facet_region.xml')
 tol = 1e-1
-subdomain1 = df.MeshFunction("size_t", mesh0, mesh0.topology().dim() - 1, 0)  # Criar um novo subdomínio para LV
-subdomain2 = df.MeshFunction("size_t", mesh0, mesh0.topology().dim() - 1, 0)  # Criar um novo subdomínio para RV
-ridge_subdomain = df.MeshFunction("size_t", mesh0, mesh0.topology().dim() - 1, 0)  # Criar um novo subdomínio para o ridge
-mesh1_subdomain = df.MeshFunction("size_t", mesh0, mesh0.topology().dim() - 1, 0)  # Criar um novo subdomínio para LV
-mesh2_subdomain = df.MeshFunction("size_t", mesh0, mesh0.topology().dim() - 1, 0)  # Criar um novo subdomínio para LV
+subdomain1 = df.MeshFunction("size_t", mesh0, mesh0.topology().dim() - 1, 0)  
+subdomain2 = df.MeshFunction("size_t", mesh0, mesh0.topology().dim() - 1, 0)  
+ridge_subdomain = df.MeshFunction("size_t", mesh0, mesh0.topology().dim() - 1, 0)  
+mesh1_subdomain = df.MeshFunction("size_t", mesh0, mesh0.topology().dim() - 1, 0)  
+mesh2_subdomain = df.MeshFunction("size_t", mesh0, mesh0.topology().dim() - 1, 0)  
 
 markers = {
     "base": 10,
@@ -220,7 +220,7 @@ markers = {
 }
 
 # # ζ(zeta) é para separar o Ápex (0) da base (1)
-# zeta, bcsZeta, V_zeta = solve_laplace(mesh, ffun, [1, 0], markers, "zeta")
+zeta, bcsZeta, V_zeta = solve_laplace(mesh0, ffun, [1, 0], markers, "zeta")
 # save_solution(zeta, meshname+"_zeta.pvd")
 
 # # ν(ni) é para separar o LV (0) do RV(1) onde o septo (0.5) faz parte do LV
@@ -267,11 +267,11 @@ markers_subdomain ={
 # # ρ(ro) representa a distância do endocárdio ao epicárdio. É resolvido separado para o RV e o LV.
 # Para o LV: endoLV (0) e epiLV(1). Para o RV: endoRV não septal (0), epiRV(1) e endoRV septal (1)
 # np.floor(ni)
-# ro_lv, subdomain1 = solve_lv(mesh, ni, subdomain1)
+# ro_lv, subdomain1 = solve_lv(mesh0, ni, subdomain1)
 # save_solution(ro_lv, meshname+"_roLV.pvd")
 # with df.XDMFFile("LV_subdomain.xdmf") as file:
     # file.write(mesh1_subdomain)
-# ro_rv, subdomain2 = solve_rv(mesh, subdomain2)
+# ro_rv, subdomain2 = solve_rv(mesh0, subdomain2)
 # save_solution(ro_rv, meshname+"_roRV.pvd")
 # with df.XDMFFile("Rv_subdomain.xdmf") as file:
 #     file.write(subdomain2)
