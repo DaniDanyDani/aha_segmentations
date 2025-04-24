@@ -5,6 +5,42 @@ import numpy as np
 import meshio
 import subprocess
 
+
+def getApex(mesh, boundary_markers, boundary_values, ldrb_markers):
+    V = df.FunctionSpace(mesh, 'CG', 1)
+
+    # Define boundary condition
+    u_base, u_apex = boundary_values
+    base_bc = [df.DirichletBC(V, u_base, boundary_markers, ldrb_markers["base"])]
+    
+    dx = df.Measure('dx', domain=mesh)
+
+    # Define variational problem
+    u = df.TrialFunction(V)
+    v = df.TestFunction(V)
+    f = df.Constant(1)   
+    a = df.dot(df.grad(u), df.grad(v))*dx  
+    L = f*v*dx
+
+    # Compute solution
+    apex = df.Function(V)
+
+    df.solve(a == L, apex, base_bc, solver_parameters=dict(linear_solver='gmres', preconditioner='hypre_amg')) 
+    # save_solution(apex, "apex.pvd")
+
+    dof_x = V.tabulate_dof_coordinates().reshape((-1,3))
+    apex_values = apex.vector().get_local()
+    local_max_val = apex_values.max()
+    # print(f"{apex_values.argmax()=}")
+    local_apex_coord = dof_x[apex_values.argmax()]
+    # print(f"{local_max_val=}")
+
+    comm = MPI.COMM_WORLD
+    global_max = comm.allreduce(local_max_val, op=MPI.MAX)
+    apex_coord = comm.bcast(local_apex_coord if local_max_val == global_max else None, root=0)
+
+    return apex_coord
+
 def solve_laplace(mesh, boundary_markers, boundary_values, ldrb_markers, uvc = "None"):
 
     if uvc == "None":
@@ -211,6 +247,7 @@ subdomain2 = df.MeshFunction("size_t", mesh0, mesh0.topology().dim() - 1, 0)
 ridge_subdomain = df.MeshFunction("size_t", mesh0, mesh0.topology().dim() - 1, 0)  
 mesh1_subdomain = df.MeshFunction("size_t", mesh0, mesh0.topology().dim() - 1, 0)  
 mesh2_subdomain = df.MeshFunction("size_t", mesh0, mesh0.topology().dim() - 1, 0)  
+mesh3_subdomain = df.MeshFunction("size_t", mesh0, mesh0.topology().dim() - 1, 0)  
 
 markers = {
     "base": 10,
@@ -221,11 +258,11 @@ markers = {
 
 # # ζ(zeta) é para separar o Ápex (0) da base (1)
 zeta, bcsZeta, V_zeta = solve_laplace(mesh0, ffun, [1, 0], markers, "zeta")
-# save_solution(zeta, meshname+"_zeta.pvd")
+save_solution(zeta, meshname+"_zeta.pvd")
 
 # # ν(ni) é para separar o LV (0) do RV(1) onde o septo (0.5) faz parte do LV
 ni, bcsNi, V_ni = solve_laplace(mesh0, ffun, [1, 0], markers, "ni")
-# save_solution(ni, meshname+"_ni.pvd")
+save_solution(ni, meshname+"_ni.pvd")
 
 for facet in df.facets(mesh0):
     vertex_values = [(ni(vertex.point())) for vertex in vertices(facet)]
@@ -376,6 +413,126 @@ for face in df.facets(mesh0):
     # i+=1
 
 
+
+           
+    
            
 with df.XDMFFile("surface.xdmf") as file:
     file.write(mesh2_subdomain)
+
+apex_coords = getApex(mesh0, ffun, [1, 0], markers)
+# print(f"Apex coord = {apex_coords}")
+
+min_dist = None
+
+for face in df.facets(mesh0):
+
+    if mesh2_subdomain[face] == 1:
+        
+        for vertex in df.vertices(face):
+            # print(f" Vertex = {vertex.point().array()}")
+            vertex_coords = vertex.point().array()
+            if min_dist == None:
+                min_dist = ( (apex_coords[0] - vertex_coords[0]) ** (2) + (apex_coords[1] - vertex_coords[1]) ** (2) + (apex_coords[2] - vertex_coords[2]) ** (2) ) ** ( 1/2 )
+                min_coords = vertex.point().array()
+                continue
+            
+            min_dist_temp = ( (apex_coords[0] - vertex_coords[0]) ** (2) + (apex_coords[1] - vertex_coords[1]) ** (2) + (apex_coords[2] - vertex_coords[2]) ** (2) ) ** ( 1/2 )
+            
+            if min_dist_temp <= min_dist:
+                min_dist = min_dist_temp
+                min_coords = vertex.point().array()
+                continue
+
+
+print(f"Min_coord_apex-septo = {min_coords}")
+
+apex_sept = min_coords
+
+min_dist = None
+max_dist = None
+for face in df.facets(mesh0):
+
+    if ffun[face] == markers["base"] and mesh2_subdomain[face] == 1:
+        
+        for vertex in df.vertices(face):
+            # print(f" Vertex = {vertex.point().array()}")
+            vertex_coords = vertex.point().array()
+            if min_dist == None:
+                min_dist = ( (apex_coords[0] - vertex_coords[0]) ** (2) + (apex_coords[1] - vertex_coords[1]) ** (2) + (apex_coords[2] - vertex_coords[2]) ** (2) ) ** ( 1/2 )
+                min_coords = vertex.point().array()
+                continue
+            if max_dist == None:
+                max_dist = ( (apex_coords[0] - vertex_coords[0]) ** (2) + (apex_coords[1] - vertex_coords[1]) ** (2) + (apex_coords[2] - vertex_coords[2]) ** (2) ) ** ( 1/2 )
+                max_coords = vertex.point().array()
+                continue
+            
+            dist_temp = ( (apex_coords[0] - vertex_coords[0]) ** (2) + (apex_coords[1] - vertex_coords[1]) ** (2) + (apex_coords[2] - vertex_coords[2]) ** (2) ) ** ( 1/2 )
+            
+            if dist_temp <= min_dist:
+                min_dist = dist_temp
+                min_coords = vertex.point().array()
+
+            elif dist_temp >= max_dist:
+                max_dist = dist_temp
+                max_coords = vertex.point().array()
+
+print(f"Min_sept_coord = {min_coords}\nMax_sept_coord = {max_coords}")
+
+anterior = [0, 0]
+if apex_sept[0] >= min_coords[0]:
+    anterior[0] = 1
+
+if apex_sept[1] >= min_coords[1]:
+    anterior[1] = 1
+
+print(f"{anterior=}")
+
+
+for face in df.facets(mesh0):
+
+    if mesh2_subdomain[face] == 1:        
+        ant = 0
+        post = 0
+        for vertex in df.vertices(face):
+            vertice = vertex.point().array()
+
+            if anterior[0] == 1 and anterior[1] == 1:
+                if vertice[0] >= apex_sept[0] and vertice[1] >= apex_sept[1]:
+                    mesh3_subdomain[face] = 1
+                else:
+                    mesh3_subdomain[face] = 2
+                continue
+            
+            if anterior[0] == 1 and anterior[1] == 0:
+                if vertice[0] >= apex_sept[0] and vertice[1] < apex_sept[1]:
+                    mesh3_subdomain[face] = 1
+                else:
+                    mesh3_subdomain[face] = 2
+                continue
+            
+            if anterior[0] == 0 and anterior[1] == 1:
+                if vertice[0] <= apex_sept[0] and vertice[1] >= apex_sept[1]:
+                    ant += 1
+                    # mesh3_subdomain[face] = 1
+                else:
+                    post += 1
+                    # mesh3_subdomain[face] = 2
+                    continue
+        
+            if anterior[0] == 0 and anterior[1] == 0:
+                if vertice[0] <= apex_sept[0] and vertice[1] <= apex_sept[1]:
+                    mesh3_subdomain[face] = 1
+                else:
+                    mesh3_subdomain[face] = 2
+                continue
+    
+    if ant > post:
+        mesh3_subdomain[face] = 1
+    else:
+        mesh3_subdomain[face] = 2
+
+
+
+with df.XDMFFile("surface_split.xdmf") as file:
+    file.write(mesh3_subdomain)
