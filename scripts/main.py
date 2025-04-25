@@ -191,10 +191,10 @@ def solve_lv(mesh, ni, subdomain1):
 
     u = df.Function(V)
 
-    septo_bc = df.DirichletBC(V, df.Constant(1), subdomain1, 25)  #  septo
+    septo_bc = df.DirichletBC(V, df.Constant(0), subdomain1, 25)  #  septo
     # septo_bc = df.DirichletBC(V, df.Constant(1), Septo(), "pointwise")
-    lv_bc = df.DirichletBC(V, df.Constant(0), ffun, markers["lv"])  # lv
-    epi_bc = df.DirichletBC(V, df.Constant(1), subdomain1, 40)  # epi
+    lv_bc = df.DirichletBC(V, df.Constant(1), ffun, markers["lv"])  # lv
+    epi_bc = df.DirichletBC(V, df.Constant(0), subdomain1, 40)  # epi
 
     bcs = [septo_bc, lv_bc, epi_bc]
 
@@ -226,9 +226,9 @@ def solve_rv(mesh, subdomain2):
 
     u = df.Function(V)
 
-    septo_bc = df.DirichletBC(V, df.Constant(1), subdomain2, 40)  #  epi
-    lv_bc = df.DirichletBC(V, df.Constant(0), ffun, markers["rv"])  # rv
-    epi_bc = df.DirichletBC(V, df.Constant(0), subdomain2, 25)  # lv
+    septo_bc = df.DirichletBC(V, df.Constant(0), subdomain2, 40)  #  epi
+    lv_bc = df.DirichletBC(V, df.Constant(1), ffun, markers["rv"])  # rv
+    epi_bc = df.DirichletBC(V, df.Constant(1), subdomain2, 25)  # lv
 
     bcs = [septo_bc, lv_bc, epi_bc]
 
@@ -237,7 +237,8 @@ def solve_rv(mesh, subdomain2):
 
 
 
-meshname = "malha"
+meshname = "./inputs/malha"
+outputmeshname = "../malha"
 mesh0 = df.Mesh(meshname + '.xml')
 materials = df.MeshFunction("size_t", mesh0, meshname + '_physical_region.xml')
 ffun = df.MeshFunction("size_t", mesh0, meshname + '_facet_region.xml')
@@ -257,12 +258,12 @@ markers = {
 }
 
 # # ζ(zeta) é para separar o Ápex (0) da base (1)
-zeta, bcsZeta, V_zeta = solve_laplace(mesh0, ffun, [1, 0], markers, "zeta")
-save_solution(zeta, meshname+"_zeta.pvd")
+# zeta, bcsZeta, V_zeta = solve_laplace(mesh0, ffun, [1, 0], markers, "zeta")
+# save_solution(zeta, meshname+"_zeta.pvd")
 
 # # ν(ni) é para separar o LV (0) do RV(1) onde o septo (0.5) faz parte do LV
 ni, bcsNi, V_ni = solve_laplace(mesh0, ffun, [1, 0], markers, "ni")
-save_solution(ni, meshname+"_ni.pvd")
+save_solution(ni, outputmeshname+"_ni.pvd")
 
 for facet in df.facets(mesh0):
     vertex_values = [(ni(vertex.point())) for vertex in vertices(facet)]
@@ -286,7 +287,7 @@ for facet in df.facets(mesh0):
     elif avg_ni <= 0.5 and not (ffun[facet] == markers["base"] and ffun[facet] == markers["rv"] and ffun[facet] == markers["epi"]):
         mesh1_subdomain[facet] = 80
 
-with df.XDMFFile("malha1.xdmf") as file:
+with df.XDMFFile("../malha1.xdmf") as file:
     file.write(mesh1_subdomain)
 
 markers_subdomain ={
@@ -303,16 +304,15 @@ markers_subdomain ={
 
 # # ρ(ro) representa a distância do endocárdio ao epicárdio. É resolvido separado para o RV e o LV.
 # Para o LV: endoLV (0) e epiLV(1). Para o RV: endoRV não septal (0), epiRV(1) e endoRV septal (1)
-# np.floor(ni)
-# ro_lv, subdomain1 = solve_lv(mesh0, ni, subdomain1)
-# save_solution(ro_lv, meshname+"_roLV.pvd")
-# with df.XDMFFile("LV_subdomain.xdmf") as file:
-    # file.write(mesh1_subdomain)
-# ro_rv, subdomain2 = solve_rv(mesh0, subdomain2)
-# save_solution(ro_rv, meshname+"_roRV.pvd")
-# with df.XDMFFile("Rv_subdomain.xdmf") as file:
-#     file.write(subdomain2)
+ro_lv, subdomain1 = solve_lv(mesh0, ni, subdomain1)
+save_solution(ro_lv, outputmeshname+"_roLV.pvd")
+with df.XDMFFile("../LV_subdomain.xdmf") as file:
+    file.write(mesh1_subdomain)
 
+ro_rv, subdomain2 = solve_rv(mesh0, subdomain2)
+save_solution(ro_rv, outputmeshname+"_roRV.pvd")
+with df.XDMFFile("../Rv_subdomain.xdmf") as file:
+    file.write(subdomain2)
 
 # # Rotacional
 # para definir as cc, devemos seguir duas etapas diferentes:
@@ -377,7 +377,7 @@ for facet in df.facets(mesh0):
         ridge_subdomain[facet] = 100
 
 
-with df.XDMFFile("malha2.xdmf") as file:
+with df.XDMFFile("../malha2.xdmf") as file:
     file.write(ridge_subdomain)
 
 
@@ -387,21 +387,13 @@ for face in df.facets(mesh0):
         for vertex in df.vertices(face):
             vertices_heart.add(tuple(vertex.point().array()))
 
-
-
-
-print(f"mesh2_subdomain")
-# i = 0
 for face in df.facets(mesh0):
-    # print(f"{i=}")
 
     if ridge_subdomain[face] == 100:        
 
         for vertex in df.vertices(face):
 
             if tuple(vertex.point().array()) in vertices_heart:
-                # print(f"    {ridge_subdomain[face]=}")
-                # print(f"    {vertex.point().array()=}")
 
                 mesh2_subdomain[face] = 1
                 break
@@ -410,14 +402,10 @@ for face in df.facets(mesh0):
                 continue
 
 
-    # i+=1
-
-
-
            
     
            
-with df.XDMFFile("surface.xdmf") as file:
+with df.XDMFFile("../surface.xdmf") as file:
     file.write(mesh2_subdomain)
 
 apex_coords = getApex(mesh0, ffun, [1, 0], markers)
@@ -534,5 +522,5 @@ for face in df.facets(mesh0):
 
 
 
-with df.XDMFFile("surface_split.xdmf") as file:
+with df.XDMFFile("../surface_split.xdmf") as file:
     file.write(mesh3_subdomain)
