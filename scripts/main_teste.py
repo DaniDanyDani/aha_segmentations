@@ -70,35 +70,6 @@ def solve_laplace(mesh, boundary_markers, boundary_values, ldrb_markers, uvc = "
         u = df.Function(V)
         df.solve(a == L, u, bcs, solver_parameters=dict(linear_solver='gmres', preconditioner='hypre_amg')) 
 
-
-    elif uvc == "ni":
-        print("\nSolucionando para ni\n")
-        start = time.time()
-
-        V = df.FunctionSpace(mesh, 'P', 1)
-
-        # Define boundary condition
-        u_rv, u_lv = boundary_values
-
-        bc1 = df.DirichletBC(V, u_rv, boundary_markers, ldrb_markers["rv"]) 
-        bc2 = df.DirichletBC(V, u_lv, boundary_markers, ldrb_markers["lv"])
-        bcs=[bc1, bc2]
-
-        dx = df.Measure('dx', domain=mesh)
-
-        # Define variational problem
-        u = df.TrialFunction(V)
-        v = df.TestFunction(V)
-        f = df.Constant(0.0)   
-        a = df.dot(df.grad(u), df.grad(v))*dx  
-        L = f*v*dx
-
-        # Compute solution
-        u = df.Function(V)
-        df.solve(a == L, u, bcs, solver_parameters=dict(linear_solver='gmres', preconditioner='hypre_amg')) 
-        end = time.time()
-        print(f"    Tempo de execução da solução: {end - start:.2f} segundos")
-
     elif uvc == "zeta":
         print("\nSolucionando para zeta\n")
 
@@ -159,6 +130,69 @@ def solve_laplace(mesh, boundary_markers, boundary_values, ldrb_markers, uvc = "
 
     return u, bcs, V
 
+def solve_ni(mesh, boundary_markers, boundary_values, ldrb_markers):
+    print("Solucionando para ni\n")
+    start = time.time()
+
+    V = df.FunctionSpace(mesh, 'P', 1)
+
+    # Define boundary condition
+    u_rv, u_lv = boundary_values
+
+    bc1 = df.DirichletBC(V, u_rv, boundary_markers, ldrb_markers["rv"]) 
+    bc2 = df.DirichletBC(V, u_lv, boundary_markers, ldrb_markers["lv"])
+    bcs=[bc1, bc2]
+
+    dx = df.Measure('dx', domain=mesh)
+
+    # Define variational problem
+    u = df.TrialFunction(V)
+    v = df.TestFunction(V)
+    f = df.Constant(0.0)   
+    a = df.dot(df.grad(u), df.grad(v))*dx  
+    L = f*v*dx
+
+    # Compute solution
+    u = df.Function(V)
+    df.solve(a == L, u, bcs, solver_parameters=dict(linear_solver='gmres', preconditioner='hypre_amg')) 
+    end = time.time()
+    print(f"    Tempo de execução da solução: {end - start:.2f} segundos\n")
+    return u, bcs, V
+
+def solve_ro(mesh, boundary_markers, boundary_values, markers, subdomain):
+    print("Solucionando ro\n")
+    start = time.time()
+
+    V = df.FunctionSpace(mesh, 'P', 1)
+
+    # Define boundary condition
+    u_endo, u_septo = boundary_values
+    u_epi = u_septo
+
+    bc1 = df.DirichletBC(V, u_endo, boundary_markers, markers["rv"]) 
+    bc2 = df.DirichletBC(V, u_endo, boundary_markers, markers["lv"])
+    bc3 = df.DirichletBC(V, u_epi, boundary_markers, markers["epi"])
+    bc4 = df.DirichletBC(V, u_septo, subdomain, 1)
+    
+    bcs=[bc1, bc2, bc3, bc4]
+
+    dx = df.Measure('dx', domain=mesh)
+
+    # Define variational problem
+    u = df.TrialFunction(V)
+    v = df.TestFunction(V)
+    f = df.Constant(0.0)   
+    a = df.dot(df.grad(u), df.grad(v))*dx  
+    L = f*v*dx
+
+    # Compute solution
+    u = df.Function(V)
+    df.solve(a == L, u, bcs, solver_parameters=dict(linear_solver='gmres', preconditioner='hypre_amg')) 
+    end = time.time()
+    print(f"    Tempo de execução da solução: {end - start:.2f} segundos\n")
+    return u, bcs, V
+
+
 def save_solution(u, name = "laplace.pvd"):
     # Save solution to file in VTK format
     vtkfile = File(name)
@@ -177,13 +211,6 @@ def solve_lv(mesh, ni, subdomain1):
             subdomain1[facet] = 40
 
     V = df.FunctionSpace(mesh, 'P', 1)
-
-    # ni_values = ni.compute_vertex_values(mesh)
-    # dof_x = V.tabulate_dof_coordinates().reshape((-1, 3))
-    # septo_nodes = [i for i, val in enumerate(ni_values) if abs(val - 0.5) < tol]
-    # class Septo(SubDomain):
-    #     def inside(self, x, on_boundary):
-    #         return any((abs(x - dof_x[i]) < tol).all() for i in septo_nodes)
 
     dx = df.Measure('dx', domain=mesh)
 
@@ -266,16 +293,16 @@ markers = {
 # save_solution(zeta, meshname+"_zeta.pvd")
 
 # # ν(ni) é para separar o LV (0) do RV(1) onde o septo (0.5) faz parte do LV
-ni, bcsNi, V_ni = solve_laplace(mesh0, ffun, [1, 0], markers, "ni")
+ni, bcsNi, V_ni = solve_ni(mesh0, ffun, [1, 0], markers)
 save_solution(ni, outputmeshname+"_ni.pvd")
 
 print(f"Separando mesh de para subdomínios do lv-rv")
 start = time.time()
 for facet in df.facets(mesh0):
-    vertex_values = [(ni(vertex.point())) for vertex in vertices(facet)]
+    
+    vertex_values = [(ni(vertex.point())) for vertex in df.vertices(facet)]
     avg_ni = sum(vertex_values) / len(vertex_values)
-    # print(f"{vertex_values}")
-    # aaaaaa = input("aaaaaaaaaaa")
+
     if avg_ni > 0.5 and ffun[facet] == markers["epi"]:
         mesh1_subdomain[facet] = 10
     elif avg_ni > 0.5 and ffun[facet] == markers["rv"]:
@@ -297,7 +324,7 @@ with df.XDMFFile("./malha1.xdmf") as file:
     file.write(mesh1_subdomain)
 end = time.time()
 
-print(f"    Tempo de execução: {end-start:.2f} segundos")
+print(f"    Tempo de execução: {end-start:.2f} segundos\n")
 
 markers_subdomain ={
     "epiRV": 10,
@@ -321,23 +348,30 @@ for face in df.facets(mesh0):
 for face in df.facets(mesh0):
     
     if 10 <= mesh1_subdomain[face] <= 40: 
-
+        in_vertex = 0
         for vertex in df.vertices(face):
-            
             if tuple(vertex.point().array()) in vertices_lv:
-                mesh2_subdomain[face] = 1
-                break
+                in_vertex += 1
+                # mesh2_subdomain[face] = 1
+                # break
             
             else:
                 continue
-
+        
+        if in_vertex > 1:
+            mesh2_subdomain[face] = 1
+            
     else:
         continue
 
 with df.XDMFFile("./septo_surf.xdmf") as file:
     file.write(mesh2_subdomain)
 end = time.time()
-print(f"    Tempo de execução: {end-start:.2f} segundos")
+print(f"    Tempo de execução: {end-start:.2f} segundos\n")
+
+
+ro, bcsRo, V_ro = solve_ro(mesh0, ffun, [1, 0], markers, mesh2_subdomain)
+save_solution(ro, outputmeshname+"_ro.pvd")
 
 
 # # ρ(ro) representa a distância do endocárdio ao epicárdio. É resolvido separado para o RV e o LV.
