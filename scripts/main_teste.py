@@ -84,7 +84,7 @@ def solve_laplace(mesh, boundary_markers, boundary_values, ldrb_markers, uvc = "
         # Define variational problem
         u = df.TrialFunction(V)
         v = df.TestFunction(V)
-        f = df.Constant(1)   
+        f = df.Constant(1)
         a = df.dot(df.grad(u), df.grad(v))*dx  
         L = f*v*dx
 
@@ -130,6 +130,8 @@ def solve_laplace(mesh, boundary_markers, boundary_values, ldrb_markers, uvc = "
 
     return u, bcs, V
 
+
+
 def solve_ni(mesh, boundary_markers, boundary_values, ldrb_markers):
     print("Solucionando para ni\n")
     start = time.time()
@@ -158,6 +160,66 @@ def solve_ni(mesh, boundary_markers, boundary_values, ldrb_markers):
     end = time.time()
     print(f"    Tempo de execução da solução: {end - start:.2f} segundos\n")
     return u, bcs, V
+
+def solve_dmepi(mesh, boundary_markers, boundary_values, markers, subdomain, tm, um):
+    print("Solucionando dmepi\n")
+    start = time.time()
+
+    V = df.FunctionSpace(mesh, 'P', 1)
+
+    # Define boundary condition
+    #bc1 = df.DirichletBC(V, u_endo, boundary_markers, markers["rv"]) 
+    #bc2 = df.DirichletBC(V, u_endo, boundary_markers, markers["lv"])
+    bc3 = df.DirichletBC(V, 0, boundary_markers, markers["epi"])
+    bc4 = df.DirichletBC(V, 0, subdomain, 1)
+    
+    bcs=[bc3, bc4]
+
+    dx = df.Measure('dx', domain=mesh)
+
+    # Define variational problem
+    u = df.TrialFunction(V)
+    v = df.TestFunction(V)
+    f = df.Constant(1.0)   
+    a = df.dot(df.grad(u), tm*v)*dx  
+    L = f*v*dx
+
+    # Compute solution
+    u = df.Function(V)
+    df.solve(a == L, u, bcs, solver_parameters=dict(linear_solver='gmres', preconditioner='hypre_amg')) 
+    end = time.time()
+    print(f"    Tempo de execução da solução: {end - start:.2f} segundos\n")
+    return u
+
+def solve_dmendo(mesh, boundary_markers, boundary_values, markers, subdomain, tm):
+    print("Solucionando dmendo\n")
+    start = time.time()
+
+    V = df.FunctionSpace(mesh, 'P', 1)
+
+    # Define boundary condition
+    bc1 = df.DirichletBC(V, 0, boundary_markers, markers["rv"]) 
+    bc2 = df.DirichletBC(V, 0, boundary_markers, markers["lv"])
+    # bc3 = df.DirichletBC(V, 0, boundary_markers, markers["epi"])
+    # bc4 = df.DirichletBC(V, 0, subdomain, 1)
+    
+    bcs=[bc1, bc2]
+
+    dx = df.Measure('dx', domain=mesh)
+
+    # Define variational problem
+    u = df.TrialFunction(V)
+    v = df.TestFunction(V)
+    f = df.Constant(1.0)   
+    a = df.dot(- df.grad(u), tm)*v*dx  
+    L = f*v*dx
+
+    # Compute solution
+    u = df.Function(V)
+    df.solve(a == L, u, bcs, solver_parameters=dict(linear_solver='gmres', preconditioner='hypre_amg')) 
+    end = time.time()
+    print(f"    Tempo de execução da solução: {end - start:.2f} segundos\n")
+    return u
 
 def solve_ro(mesh, boundary_markers, boundary_values, markers, subdomain):
     print("Solucionando ro\n")
@@ -373,50 +435,15 @@ print(f"    Tempo de execução: {end-start:.2f} segundos\n")
 ro, bcsRo, V_ro = solve_ro(mesh0, ffun, [1, 0], markers, mesh2_subdomain)
 save_solution(ro, outputmeshname+"_ro.pvd")
 
+norm_ro = df.sqrt(df.dot(df.grad(ro), df.grad(ro)))
 
-# # ρ(ro) representa a distância do endocárdio ao epicárdio. É resolvido separado para o RV e o LV.
-# Para o LV: endoLV (0) e epiLV(1). Para o RV: endoRV não septal (0), epiRV(1) e endoRV septal (1)
-# ro_lv, subdomain1 = solve_lv(mesh0, ni, subdomain1)
-# save_solution(ro_lv, outputmeshname+"_roLV.pvd")
-# with df.XDMFFile("./LV_subdomain.xdmf") as file:
-#     file.write(mesh1_subdomain)
+tm = df.grad(ro) / norm_ro
 
-# ro_rv, subdomain2 = solve_rv(mesh0, subdomain2)
-# save_solution(ro_rv, outputmeshname+"_roRV.pvd")
-# with df.XDMFFile("./Rv_subdomain.xdmf") as file:
-#     file.write(subdomain2)
+dmepi = solve_dmepi(mesh0, ffun, [], markers, mesh2_subdomain, tm, ro)
+dmendo = solve_dmendo(mesh0, ffun, [], markers, mesh2_subdomain, tm)
 
-# ro_total = df.Function(ro_lv.function_space())
-# ro_total.vector()[:] = (ro_lv.vector()) + (ro_rv.vector())
-
-# save_solution(ro_total, outputmeshname+"_rototal.pvd")
-
-# def solve_ro(mesh, cc, ni):
-#     V = df.FunctionSpace(mesh, 'P', 1)
-#     u = df.Function(V)
-
-#     vec = u.vector()
-
-#     dof_coords = V.tabulate_dof_coordinates().reshape((-1, mesh.geometry().dim()))
-
-#     for i, x in enumerate(dof_coords):
-#         if 
-    
-#     dx = df.Measure('dx', domain=mesh)
-
-#     rv_ridge = df.TrialFunction(V)
-#     v = df.TestFunction(V)
-#     f = df.Constant(0.0)   
-#     a = df.dot(df.grad(rv_ridge), df.grad(v))*dx  
-#     L = f*v*dx
-
-#     rv_ridge = df.Function(V)
-
-
-
-#     bcs = [baseRV_bc, epiRV_bc, endoRV_bc, mioRV_bc, epiLV_bc]
-
-#     df.solve(a == L, rv_ridge, bcs, solver_parameters=dict(linear_solver='gmres', preconditioner='hypre_amg')) 
+m = dmepi / ( dmepi + dmendo )
+save_solution(m, outputmeshname+"_m.pvd")
 
 
 
