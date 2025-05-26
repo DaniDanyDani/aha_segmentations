@@ -149,6 +149,8 @@ def separate_subdomain_2(mesh1_subdomain, mesh2_subdomain, ffun, markers):
                 
         else:
             continue
+    
+    # save_subdomain(mesh2_subdomain, "subdomain2.xdmf")
 
     # Get Apex
     u = df.TrialFunction(V)
@@ -165,12 +167,12 @@ def separate_subdomain_2(mesh1_subdomain, mesh2_subdomain, ffun, markers):
     df.solve(a == L, u, bcs, solver_parameters=dict(linear_solver='gmres', preconditioner='hypre_amg')) 
 
     dof_x = V.tabulate_dof_coordinates().reshape((-1,3))
-    apex_values = apex.vector().get_local()
+    apex_values = u.vector().get_local()
     local_max_val = apex_values.max()
     local_apex_coord = dof_x[apex_values.argmax()]
     comm = MPI.COMM_WORLD
     global_max = comm.allreduce(local_max_val, op=MPI.MAX)
-    apex_coord = comm.bcast(local_apex_coord if local_max_val == global_max else None, root=0)
+    apex_coords = comm.bcast(local_apex_coord if local_max_val == global_max else None, root=0)
     
 
     min_dist = None
@@ -200,6 +202,7 @@ def separate_subdomain_2(mesh1_subdomain, mesh2_subdomain, ffun, markers):
                     continue
     
     apex_septo = min_coords
+    print(f"Apex no septo {apex_septo}")
 
     min_dist = None
     max_dist = None
@@ -207,7 +210,7 @@ def separate_subdomain_2(mesh1_subdomain, mesh2_subdomain, ffun, markers):
     for face in df.facets(mesh0):
 
         if ffun[face] == markers["base"] and mesh2_subdomain[face] == 2:
-
+            print("\n\nAchou!!\n\n")
             for vertex in df.vertices(face):
 
                 vertex_coords = vertex.point().array()
@@ -244,11 +247,11 @@ def separate_subdomain_2(mesh1_subdomain, mesh2_subdomain, ffun, markers):
 
     anterior = [0, 0]
 
-    if apex_sept[0] >= min_coords[0]:
+    if apex_septo[0] >= min_coords[0]:
 
         anterior[0] = 1
 
-    if apex_sept[1] >= min_coords[1]:
+    if apex_septo[1] >= min_coords[1]:
 
         anterior[1] = 1
 
@@ -256,10 +259,12 @@ def separate_subdomain_2(mesh1_subdomain, mesh2_subdomain, ffun, markers):
 
     for face in df.facets(mesh0):
 
-        if mesh2_subdomain[face] == 2:        
+        ant = 0
+        post = 0
+        
+        if mesh2_subdomain[face] == 2:  
+            print(f"\n\nEntrou!!\n\n")      
 
-            ant = 0
-            post = 0
 
             for vertex in df.vertices(face):
 
@@ -267,34 +272,34 @@ def separate_subdomain_2(mesh1_subdomain, mesh2_subdomain, ffun, markers):
 
                 if anterior[0] == 1 and anterior[1] == 1:
 
-                    if vertice[0] >= apex_sept[0] and vertice[1] >= apex_sept[1]:
-
-                        mesh2_subdomain[face] = 1
+                    if vertice[0] >= apex_septo[0] and vertice[1] >= apex_septo[1]:
+  
+                        ant += 1
 
                     else:
 
-                        mesh2_subdomain[face] = 2
+                        post += 1
+
+                        continue
 
 
                     continue
 
                 if anterior[0] == 1 and anterior[1] == 0:
 
-                    if vertice[0] >= apex_sept[0] and vertice[1] < apex_sept[1]:
+                    if vertice[0] >= apex_septo[0] and vertice[1] < apex_septo[1]:
 
-
-                        mesh2_subdomain[face] = 1
+                        ant += 1
 
                     else:
 
+                        post += 1
 
-                        mesh2_subdomain[face] = 2
-
-                    continue
+                        continue
 
                 if anterior[0] == 0 and anterior[1] == 1:
 
-                    if vertice[0] <= apex_sept[0] and vertice[1] >= apex_sept[1]:
+                    if vertice[0] < apex_septo[0] and vertice[1] >= apex_septo[1]:
 
                         ant += 1
 
@@ -306,16 +311,15 @@ def separate_subdomain_2(mesh1_subdomain, mesh2_subdomain, ffun, markers):
 
                 if anterior[0] == 0 and anterior[1] == 0:
 
-                    if vertice[0] <= apex_sept[0] and vertice[1] <= apex_sept[1]:
+                    if vertice[0] < apex_septo[0] and vertice[1] < apex_septo[1]:
 
-                        mesh2_subdomain[face] = 1
-
+                        ant += 1
 
                     else:
 
-                        mesh2_subdomain[face] = 2
+                        post += 1
 
-                    continue
+                        continue
 
 
         if ant > post:
